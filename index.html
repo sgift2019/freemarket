@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>フリマ</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f5f5f3;color:#1a1a1a;min-height:100vh}
+.app{max-width:900px;margin:0 auto;padding:1rem}
+.header{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;padding-bottom:1rem;border-bottom:1px solid #e5e5e5}
+.header h1{font-size:20px;font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:1rem}
+.card{background:#fff;border:1px solid #e5e5e5;border-radius:12px;overflow:hidden;cursor:pointer;transition:border-color .15s;position:relative}
+.card:hover{border-color:#aaa}
+.card.selected{border:2px solid #1D9E75}
+.card.sold{opacity:.5;cursor:default}
+.card.negotiating{cursor:default}
+.card-img{width:100%;height:150px;object-fit:cover;display:block;background:#f0f0f0}
+.card-no-img{width:100%;height:150px;background:#f0f0f0;display:flex;align-items:center;justify-content:center;color:#aaa;font-size:13px}
+.card-body{padding:12px}
+.card-name{font-size:15px;font-weight:500;margin-bottom:3px}
+.card-desc{font-size:13px;color:#666;margin-bottom:8px;line-height:1.4;min-height:18px}
+.card-price{font-size:17px;font-weight:500;color:#0F6E56}
+.badge{display:inline-block;font-size:11px;padding:2px 9px;border-radius:20px;font-weight:500;margin-top:6px}
+.b-avail{background:#E1F5EE;color:#085041}
+.b-neg{background:#FAEEDA;color:#854F0B}
+.b-sold{background:#F7C1C1;color:#791F1F}
+.sel-dot{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;background:#1D9E75;display:flex;align-items:center;justify-content:center}
+.sel-dot i{color:#fff;font-size:13px}
+.sticky-bar{background:#fff;border-top:1px solid #e5e5e5;padding:10px 0;margin-top:1.5rem;display:flex;align-items:center;justify-content:space-between;gap:12px;position:sticky;bottom:0}
+.sticky-bar span{font-size:14px;color:#666}
+.btn{padding:7px 18px;border-radius:8px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:14px;color:#1a1a1a;transition:background .12s}
+.btn:hover{background:#f5f5f5}
+.btn-primary{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.btn-primary:hover{opacity:.82}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed}
+.btn-sm{padding:4px 11px;font-size:12px}
+.btn-success{background:#1D9E75;color:#fff;border-color:#1D9E75}
+.btn-success:hover{opacity:.85}
+.btn-warn{background:#BA7517;color:#fff;border-color:#BA7517}
+.btn-warn:hover{opacity:.85}
+.btn-danger{background:#E24B4A;color:#fff;border-color:#E24B4A}
+.btn-danger:hover{opacity:.85}
+.btn-icon{padding:4px 8px;font-size:13px}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);display:flex;align-items:center;justify-content:center;z-index:100}
+.modal{background:#fff;border-radius:12px;padding:1.5rem;width:500px;max-width:95vw;max-height:90vh;overflow-y:auto}
+.modal h2{font-size:17px;font-weight:500;margin-bottom:1rem}
+.fl{display:flex;gap:10px;align-items:center}
+.fl-col{display:flex;flex-direction:column;gap:14px}
+label{font-size:13px;color:#666;display:block;margin-bottom:4px}
+input,textarea{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:8px;background:#fff;color:#1a1a1a;font-size:14px;font-family:inherit}
+input:focus,textarea:focus{outline:none;border-color:#888}
+textarea{resize:vertical;min-height:76px}
+.sel-list{background:#f5f5f3;border-radius:8px;padding:10px 12px;font-size:13px}
+.sel-list p{color:#666;margin-bottom:5px;font-size:12px}
+.sel-list li{display:flex;justify-content:space-between;padding:2px 0}
+.divider{border:none;border-top:1px solid #e5e5e5;margin:8px 0}
+.msg-ok{background:#E1F5EE;color:#085041;padding:9px 12px;border-radius:8px;font-size:13px;margin-top:10px}
+.msg-err{background:#FCEBEB;color:#A32D2D;padding:9px 12px;border-radius:8px;font-size:13px;margin-top:10px}
+.empty{text-align:center;padding:3rem 1rem;color:#999}
+.admin-bar{display:flex;align-items:center;justify-content:space-between;margin-bottom:1rem}
+.prod-row{display:flex;align-items:center;gap:10px;padding:10px 12px;background:#fff;border:1px solid #e5e5e5;border-radius:8px;margin-bottom:8px}
+.prod-thumb{width:46px;height:46px;border-radius:8px;background:#f0f0f0;flex-shrink:0;display:flex;align-items:center;justify-content:center;overflow:hidden}
+.prod-thumb img{width:46px;height:46px;object-fit:cover}
+.prod-info{flex:1;min-width:0}
+.prod-info .name{font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.prod-info .price{font-size:13px;color:#666}
+.prod-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
+.sort-btns{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
+.url-hint{font-size:12px;color:#888;margin-top:5px;line-height:1.5}
+.url-hint code{font-family:monospace;background:#f0f0f0;padding:1px 4px;border-radius:4px;font-size:11px}
+.img-preview{width:100%;max-height:130px;object-fit:cover;border-radius:8px;margin-top:8px;display:block}
+.pw-wrap{min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
+@media(max-width:500px){
+  .grid{grid-template-columns:1fr 1fr}
+  .prod-actions{flex-direction:column}
+}
+</style>
+</head>
+<body>
+<div class="app" id="root"></div>
+
+<script>
+const ADMIN_PW = "admin1234";
+
+function load(k, d) { try { return JSON.parse(localStorage.getItem(k) || "null") || d } catch { return d } }
+function save(k, v) { localStorage.setItem(k, JSON.stringify(v)) }
+function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }
+function esc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") }
+
+function driveUrl(raw) {
+  if (!raw) return "";
+  raw = raw.trim();
+  const m1 = raw.match(/\/file\/d\/([^\/\?]+)/);
+  if (m1) return `https://drive.google.com/uc?export=view&id=${m1[1]}`;
+  const m2 = raw.match(/id=([^&]+)/);
+  if (m2) return `https://drive.google.com/uc?export=view&id=${m2[1]}`;
+  if (raw.startsWith("http")) return raw;
+  return "";
+}
+
+const isAdmin = () => location.search.includes("admin");
+
+let S = {
+  items: load("fm3_items", []),
+  ownerEmail: load("fm3_owner", ""),
+  sel: [],
+  layer: null,
+  adminAuth: false,
+  adminPw: "",
+  adminPwErr: false,
+  editUrlRaw: "",
+  editUrlPreview: "",
+};
+
+function set(patch) { Object.assign(S, patch); render() }
+
+function render() {
+  const root = document.getElementById("root");
+  if (!root) return;
+  let h = renderHeader();
+  if (isAdmin()) {
+    h += S.adminAuth ? renderAdminMain() : renderAdminLogin();
+  } else {
+    h += renderShop();
+  }
+  root.innerHTML = h;
+  if (S.layer) {
+    showOverlay();
+  }
+}
+
+function renderHeader() {
+  if (isAdmin() && S.adminAuth) {
+    return `<div class="header"><h1><i class="ti ti-settings"></i> 管理画面</h1><button class="btn btn-sm" onclick="set({adminAuth:false})"><i class="ti ti-logout"></i> ログアウト</button></div>`;
+  }
+  return `<div class="header"><h1><i class="ti ti-shopping-bag"></i> フリマ</h1></div>`;
+}
+
+function renderShop() {
+  const avail = S.items.filter(i => i.status !== "sold");
+  const sold = S.items.filter(i => i.status === "sold");
+  const all = [...avail, ...sold];
+  if (!all.length) return `<div class="empty"><i class="ti ti-package" style="font-size:36px;display:block;margin-bottom:10px"></i>まだ商品がありません</div>`;
+  let h = `<div class="grid">`;
+  all.forEach(it => {
+    const isSel = S.sel.includes(it.id);
+    const isSold = it.status === "sold";
+    const isNeg = it.status === "negotiating";
+    const clickable = !isSold && !isNeg;
+    const imgUrl = driveUrl(it.imageUrl || "");
+    h += `<div class="card${isSel ? " selected" : ""}${isSold ? " sold" : ""}${isNeg ? " negotiating" : ""}" ${clickable ? `onclick="toggle('${it.id}')"` : ""}>`;
+    if (imgUrl) {
+      h += `<img class="card-img" src="${esc(imgUrl)}" alt="${esc(it.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
+    }
+    h += `<div class="card-no-img" style="${imgUrl ? "display:none" : ""}"><i class="ti ti-photo" style="font-size:28px"></i></div>`;
+    h += `<div class="card-body">
+      <div class="card-name">${esc(it.name)}</div>
+      <div class="card-desc">${esc(it.description)}</div>
+      <div class="card-price">¥${Number(it.price).toLocaleString()}</div>
+      <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}">${isSold ? "Sold Out" : isNeg ? "交渉中" : "出品中"}</span>
+    </div>`;
+    if (isSel) h += `<div class="sel-dot"><i class="ti ti-check"></i></div>`;
+    h += `</div>`;
+  });
+  h += `</div>`;
+  const cnt = S.sel.length;
+  const total = S.sel.reduce((s, id) => { const it = S.items.find(i => i.id === id); return s + (it ? Number(it.price) : 0) }, 0);
+  h += `<div class="sticky-bar">
+    <span>${cnt ? `${cnt}点選択中 — 合計 ¥${total.toLocaleString()}` : "ほしいものを選んでください"}</span>
+    <button class="btn btn-primary" onclick="openNeg()" ${cnt ? "" : "disabled"}>交渉する →</button>
+  </div>`;
+  return h;
+}
+
+function toggle(id) {
+  const it = S.items.find(i => i.id === id);
+  if (!it || it.status === "sold" || it.status === "negotiating") return;
+  const sel = [...S.sel];
+  const idx = sel.indexOf(id);
+  if (idx === -1) sel.push(id); else sel.splice(idx, 1);
+  set({ sel });
+}
+
+function openNeg() { if (S.sel.length) set({ layer: "neg" }) }
+
+function showOverlay() {
+  const existing = document.getElementById("overlay-root");
+  if (existing) existing.remove();
+  const div = document.createElement("div");
+  div.id = "overlay-root";
+  document.body.appendChild(div);
+  if (S.layer === "neg") div.innerHTML = renderNegModal();
+  else if (S.layer === "done") div.innerHTML = renderDoneModal();
+  else if (S.layer === "add") div.innerHTML = renderAddModal();
+  bindUrlInput();
+}
+
+function renderNegModal() {
+  const its = S.sel.map(id => S.items.find(i => i.id === id)).filter(Boolean);
+  const total = its.reduce((s, i) => s + Number(i.price), 0);
+  return `<div class="overlay" onclick="bgClose(event)">
+  <div class="modal">
+    <h2><i class="ti ti-message-circle"></i> 交渉フォーム</h2>
+    <div class="sel-list" style="margin-bottom:14px">
+      <p>選択した商品</p>
+      <ul style="list-style:none">${its.map(i => `<li><span>${esc(i.name)}</span><span>¥${Number(i.price).toLocaleString()}</span></li>`).join("")}</ul>
+      <hr class="divider">
+      <div style="display:flex;justify-content:space-between;font-weight:500;font-size:14px"><span>合計</span><span>¥${total.toLocaleString()}</span></div>
+    </div>
+    <div class="fl-col">
+      <div><label for="n-name">お名前</label><input id="n-name" type="text" placeholder="山田 太郎"></div>
+      <div><label for="n-email">Gmailアドレス</label><input id="n-email" type="email" placeholder="you@gmail.com"></div>
+      <div><label for="n-msg">コメント・希望価格など</label><textarea id="n-msg" placeholder="例：まとめて購入したいです。○○円でいかがでしょうか？"></textarea></div>
+    </div>
+    <div id="neg-err"></div>
+    <div class="fl" style="margin-top:16px">
+      <button class="btn" onclick="set({layer:null})">キャンセル</button>
+      <button class="btn btn-primary" onclick="submitNeg()">送信する →</button>
+    </div>
+  </div></div>`;
+}
+
+function renderDoneModal() {
+  return `<div class="overlay">
+  <div class="modal" style="text-align:center;padding:2rem">
+    <i class="ti ti-circle-check" style="font-size:48px;color:#1D9E75;display:block;margin-bottom:14px"></i>
+    <h2 style="margin-bottom:8px">送信完了！</h2>
+    <p style="font-size:14px;color:#666;margin-bottom:1.5rem">出品者から折り返しご連絡します。<br>商品は「交渉中」になりました。</p>
+    <button class="btn btn-primary" onclick="set({layer:null,sel:[]})">一覧に戻る</button>
+  </div></div>`;
+}
+
+function bgClose(e) { if (e.target === e.currentTarget) set({ layer: null }) }
+
+function submitNeg() {
+  const name = document.getElementById("n-name")?.value?.trim();
+  const email = document.getElementById("n-email")?.value?.trim();
+  const msg = document.getElementById("n-msg")?.value?.trim() || "";
+  const err = document.getElementById("neg-err");
+  if (!name) { if (err) err.innerHTML = `<div class="msg-err">お名前を入力してください</div>`; return }
+  if (!email || !email.includes("@")) { if (err) err.innerHTML = `<div class="msg-err">メールアドレスを入力してください</div>`; return }
+  const its = S.sel.map(id => S.items.find(i => i.id === id)).filter(Boolean);
+  const total = its.reduce((s, i) => s + Number(i.price), 0);
+  const itemList = its.map(i => `・${i.name}（¥${Number(i.price).toLocaleString()}）`).join("\n");
+  const subj = `【フリマ交渉】${name}さんから${its.length}点のリクエスト`;
+  const body = `${name}さん（${email}）から交渉リクエストが届きました。\n\n【希望商品】\n${itemList}\n\n【合計】¥${total.toLocaleString()}\n\n【コメント】\n${msg || "（なし）"}`;
+  const owner = S.ownerEmail || "";
+  const url = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(owner)}&cc=${encodeURIComponent(email)}&su=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
+  window.open(url, "_blank");
+  const items = S.items.map(i => S.sel.includes(i.id) ? { ...i, status: "negotiating" } : i);
+  save("fm3_items", items);
+  set({ items, layer: "done" });
+}
+
+function renderAdminLogin() {
+  return `<div class="pw-wrap">
+  <i class="ti ti-lock" style="font-size:36px"></i>
+  <div style="font-size:17px;font-weight:500">管理者ログイン</div>
+  <div style="width:260px">
+    <div style="margin-bottom:10px"><label for="pw-in">パスワード</label><input id="pw-in" type="password" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+    ${S.adminPwErr ? `<div class="msg-err">パスワードが違います</div>` : ""}
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="adminLogin()">ログイン</button>
+  </div></div>`;
+}
+
+function adminLogin() {
+  const pw = document.getElementById("pw-in")?.value || "";
+  if (pw === ADMIN_PW) set({ adminAuth: true, adminPwErr: false });
+  else set({ adminPwErr: true });
+}
+
+function renderAdminMain() {
+  let h = `<div style="margin-bottom:1.5rem">
+  <div style="font-size:13px;color:#666;margin-bottom:5px">出品者のGmailアドレス</div>
+  <div class="fl"><input type="email" id="oe-in" value="${esc(S.ownerEmail)}" placeholder="your@gmail.com" style="flex:1"><button class="btn btn-sm" onclick="saveOwner()">保存</button></div>
+  <div style="font-size:12px;color:#999;margin-top:4px">交渉メールが届くアドレスです</div></div>`;
+
+  h += `<div class="admin-bar">
+    <div style="font-size:15px;font-weight:500">商品一覧 <span style="font-size:12px;color:#999;font-weight:400">↑↓で順番変更</span></div>
+    <button class="btn btn-sm btn-primary" onclick="openAdd()"><i class="ti ti-plus"></i> 追加</button>
+  </div>`;
+
+  if (!S.items.length) {
+    h += `<div class="empty" style="padding:1.5rem"><i class="ti ti-package" style="font-size:32px;display:block;margin-bottom:8px"></i>商品なし</div>`;
+  }
+
+  S.items.forEach((it, idx) => {
+    const isNeg = it.status === "negotiating";
+    const isSold = it.status === "sold";
+    const imgUrl = driveUrl(it.imageUrl || "");
+    const isFirst = idx === 0;
+    const isLast = idx === S.items.length - 1;
+    h += `<div class="prod-row">
+      <div class="sort-btns">
+        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},-1)" ${isFirst ? "disabled" : ""} aria-label="上へ" style="${isFirst ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-up"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},1)" ${isLast ? "disabled" : ""} aria-label="下へ" style="${isLast ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-down"></i></button>
+      </div>
+      <div class="prod-thumb">${imgUrl ? `<img src="${esc(imgUrl)}" alt="" onerror="this.style.display='none'">` : `<i class="ti ti-photo" style="font-size:18px;color:#aaa"></i>`}</div>
+      <div class="prod-info">
+        <div class="name">${esc(it.name)}</div>
+        <div class="price">¥${Number(it.price).toLocaleString()} <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}" style="font-size:10px">${isSold ? "Sold Out" : isNeg ? "交渉中" : "出品中"}</span></div>
+      </div>
+      <div class="prod-actions">
+        ${isNeg ? `<button class="btn btn-sm btn-success" onclick="setStatus('${it.id}','sold')"><i class="ti ti-check"></i> 売れた</button><button class="btn btn-sm btn-warn" onclick="setStatus('${it.id}','available')"><i class="ti ti-x"></i> 決裂</button>` : ""}
+        ${isSold ? `<button class="btn btn-sm" onclick="setStatus('${it.id}','available')" title="出品中に戻す"><i class="ti ti-refresh"></i></button>` : ""}
+        <button class="btn btn-sm btn-danger" onclick="delItem('${it.id}')" aria-label="削除"><i class="ti ti-trash"></i></button>
+      </div>
+    </div>`;
+  });
+  return h;
+}
+
+function renderAddModal() {
+  return `<div class="overlay" onclick="bgClose(event)">
+  <div class="modal">
+    <h2><i class="ti ti-plus"></i> 商品を追加</h2>
+    <div class="fl-col">
+      <div>
+        <label for="a-url">Google ドライブの共有URL（任意）</label>
+        <input id="a-url" type="url" placeholder="https://drive.google.com/file/d/..." oninput="previewUrl(this.value)">
+        <div class="url-hint">
+          Google ドライブで写真を右クリック → 共有 → 「リンクを知っている全員」に変更 → リンクをコピーして貼り付け
+        </div>
+        <div id="url-preview-area"></div>
+      </div>
+      <div><label for="a-name">商品名 *</label><input id="a-name" type="text" placeholder="例：ノートPC"></div>
+      <div><label for="a-desc">説明</label><textarea id="a-desc" placeholder="状態・サイズなど"></textarea></div>
+      <div><label for="a-price">価格（円）*</label><input id="a-price" type="number" min="0" placeholder="3000"></div>
+    </div>
+    <div id="add-err"></div>
+    <div class="fl" style="margin-top:16px">
+      <button class="btn" onclick="set({layer:null,editUrlRaw:'',editUrlPreview:''})">キャンセル</button>
+      <button class="btn btn-primary" onclick="addItem()">追加する →</button>
+    </div>
+  </div></div>`;
+}
+
+function bindUrlInput() {
+  const el = document.getElementById("a-url");
+  if (el && S.editUrlRaw) {
+    el.value = S.editUrlRaw;
+    if (S.editUrlPreview) {
+      const area = document.getElementById("url-preview-area");
+      if (area) area.innerHTML = `<img class="img-preview" src="${esc(S.editUrlPreview)}" alt="プレビュー" onerror="this.style.display='none'">`;
+    }
+  }
+}
+
+function previewUrl(raw) {
+  S.editUrlRaw = raw;
+  const converted = driveUrl(raw);
+  S.editUrlPreview = converted;
+  const area = document.getElementById("url-preview-area");
+  if (area) {
+    area.innerHTML = converted ? `<img class="img-preview" src="${esc(converted)}" alt="プレビュー" onerror="this.style.display='none'">` : "";
+  }
+}
+
+function openAdd() { set({ layer: "add", editUrlRaw: "", editUrlPreview: "" }) }
+
+function addItem() {
+  const name = document.getElementById("a-name")?.value?.trim();
+  const desc = document.getElementById("a-desc")?.value?.trim() || "";
+  const price = document.getElementById("a-price")?.value;
+  const urlRaw = document.getElementById("a-url")?.value?.trim() || "";
+  const err = document.getElementById("add-err");
+  if (!name) { if (err) err.innerHTML = `<div class="msg-err">商品名を入力してください</div>`; return }
+  if (!price || isNaN(price) || Number(price) < 0) { if (err) err.innerHTML = `<div class="msg-err">価格を入力してください</div>`; return }
+  const items = [...S.items, { id: uid(), name, description: desc, price: Number(price), status: "available", imageUrl: urlRaw, createdAt: Date.now() }];
+  save("fm3_items", items);
+  set({ items, layer: null, editUrlRaw: "", editUrlPreview: "" });
+}
+
+function moveItem(idx, dir) {
+  const items = [...S.items];
+  const newIdx = idx + dir;
+  if (newIdx < 0 || newIdx >= items.length) return;
+  [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
+  save("fm3_items", items);
+  set({ items });
+}
+
+function delItem(id) {
+  if (!confirm("この商品を削除しますか？")) return;
+  const items = S.items.filter(i => i.id !== id);
+  save("fm3_items", items);
+  set({ items });
+}
+
+function setStatus(id, status) {
+  const items = S.items.map(i => i.id === id ? { ...i, status } : i);
+  save("fm3_items", items);
+  set({ items });
+}
+
+function saveOwner() {
+  const v = document.getElementById("oe-in")?.value?.trim() || "";
+  save("fm3_owner", v);
+  set({ ownerEmail: v });
+  alert("保存しました：" + v);
+}
+
+render();
+</script>
+</body>
+</html>
