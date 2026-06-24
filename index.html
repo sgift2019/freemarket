@@ -69,9 +69,9 @@ textarea{resize:vertical;min-height:76px}
 .prod-info .price{font-size:13px;color:#666}
 .prod-actions{display:flex;gap:5px;flex-wrap:wrap;align-items:center}
 .sort-btns{display:flex;flex-direction:column;gap:2px;flex-shrink:0}
-.url-hint{font-size:12px;color:#888;margin-top:5px;line-height:1.5}
-.url-hint code{font-family:monospace;background:#f0f0f0;padding:1px 4px;border-radius:4px;font-size:11px}
-.img-preview{width:100%;max-height:130px;object-fit:cover;border-radius:8px;margin-top:8px;display:block}
+.upload-zone{border:1px dashed #ccc;border-radius:8px;padding:1rem;text-align:center;cursor:pointer;color:#999;font-size:13px;transition:background .12s}
+.upload-zone:hover{background:#f5f5f5}
+.img-preview{width:100%;max-height:140px;object-fit:cover;border-radius:8px;margin-top:8px;display:block}
 .pw-wrap{min-height:300px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px}
 @media(max-width:500px){
   .grid{grid-template-columns:1fr 1fr}
@@ -85,34 +85,23 @@ textarea{resize:vertical;min-height:76px}
 <script>
 const ADMIN_PW = "admin1234";
 
+function fmt(n) { return "$" + Number(n).toLocaleString("en-US", {minimumFractionDigits:0, maximumFractionDigits:2}) }
 function load(k, d) { try { return JSON.parse(localStorage.getItem(k) || "null") || d } catch { return d } }
 function save(k, v) { localStorage.setItem(k, JSON.stringify(v)) }
 function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 5) }
 function esc(s) { return String(s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;") }
 
-function driveUrl(raw) {
-  if (!raw) return "";
-  raw = raw.trim();
-  const m1 = raw.match(/\/file\/d\/([^\/\?]+)/);
-  if (m1) return `https://drive.google.com/uc?export=view&id=${m1[1]}`;
-  const m2 = raw.match(/id=([^&]+)/);
-  if (m2) return `https://drive.google.com/uc?export=view&id=${m2[1]}`;
-  if (raw.startsWith("http")) return raw;
-  return "";
-}
-
 const isAdmin = () => location.search.includes("admin");
 
 let S = {
-  items: load("fm3_items", []),
-  ownerEmail: load("fm3_owner", ""),
+  items: load("fm4_items", []),
+  ownerEmail: load("fm4_owner", ""),
   sel: [],
   layer: null,
   adminAuth: false,
   adminPw: "",
   adminPwErr: false,
-  editUrlRaw: "",
-  editUrlPreview: "",
+  pendingImg: null,
 };
 
 function set(patch) { Object.assign(S, patch); render() }
@@ -127,40 +116,38 @@ function render() {
     h += renderShop();
   }
   root.innerHTML = h;
-  if (S.layer) {
-    showOverlay();
-  }
+  if (S.layer) showOverlay();
 }
 
 function renderHeader() {
   if (isAdmin() && S.adminAuth) {
-    return `<div class="header"><h1><i class="ti ti-settings"></i> 管理画面</h1><button class="btn btn-sm" onclick="set({adminAuth:false})"><i class="ti ti-logout"></i> ログアウト</button></div>`;
+    return `<div class="header"><h1><i class="ti ti-settings"></i> Admin</h1><button class="btn btn-sm" onclick="set({adminAuth:false})"><i class="ti ti-logout"></i> Log out</button></div>`;
   }
-  return `<div class="header"><h1><i class="ti ti-shopping-bag"></i> フリマ</h1></div>`;
+  return `<div class="header"><h1><i class="ti ti-shopping-bag"></i>Market</h1></div>`;
 }
 
 function renderShop() {
   const avail = S.items.filter(i => i.status !== "sold");
   const sold = S.items.filter(i => i.status === "sold");
   const all = [...avail, ...sold];
-  if (!all.length) return `<div class="empty"><i class="ti ti-package" style="font-size:36px;display:block;margin-bottom:10px"></i>まだ商品がありません</div>`;
+  if (!all.length) return `<div class="empty"><i class="ti ti-package" style="font-size:36px;display:block;margin-bottom:10px"></i>No items yet</div>`;
   let h = `<div class="grid">`;
   all.forEach(it => {
     const isSel = S.sel.includes(it.id);
     const isSold = it.status === "sold";
     const isNeg = it.status === "negotiating";
     const clickable = !isSold && !isNeg;
-    const imgUrl = driveUrl(it.imageUrl || "");
     h += `<div class="card${isSel ? " selected" : ""}${isSold ? " sold" : ""}${isNeg ? " negotiating" : ""}" ${clickable ? `onclick="toggle('${it.id}')"` : ""}>`;
-    if (imgUrl) {
-      h += `<img class="card-img" src="${esc(imgUrl)}" alt="${esc(it.name)}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`;
+    if (it.imageData) {
+      h += `<img class="card-img" src="${it.imageData}" alt="${esc(it.name)}">`;
+    } else {
+      h += `<div class="card-no-img"><i class="ti ti-photo" style="font-size:28px"></i></div>`;
     }
-    h += `<div class="card-no-img" style="${imgUrl ? "display:none" : ""}"><i class="ti ti-photo" style="font-size:28px"></i></div>`;
     h += `<div class="card-body">
       <div class="card-name">${esc(it.name)}</div>
       <div class="card-desc">${esc(it.description)}</div>
-      <div class="card-price">¥${Number(it.price).toLocaleString()}</div>
-      <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}">${isSold ? "Sold Out" : isNeg ? "交渉中" : "出品中"}</span>
+      <div class="card-price">${fmt(it.price)}</div>
+      <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}">${isSold ? "Sold Out" : isNeg ? "Negotiating" : "Available"}</span>
     </div>`;
     if (isSel) h += `<div class="sel-dot"><i class="ti ti-check"></i></div>`;
     h += `</div>`;
@@ -169,8 +156,8 @@ function renderShop() {
   const cnt = S.sel.length;
   const total = S.sel.reduce((s, id) => { const it = S.items.find(i => i.id === id); return s + (it ? Number(it.price) : 0) }, 0);
   h += `<div class="sticky-bar">
-    <span>${cnt ? `${cnt}点選択中 — 合計 ¥${total.toLocaleString()}` : "ほしいものを選んでください"}</span>
-    <button class="btn btn-primary" onclick="openNeg()" ${cnt ? "" : "disabled"}>交渉する →</button>
+    <span>${cnt ? `${cnt} item(s) selected — Total ${fmt(total)}` : "Select items you want"}</span>
+    <button class="btn btn-primary" onclick="openNeg()" ${cnt ? "" : "disabled"}>Negotiate →</button>
   </div>`;
   return h;
 }
@@ -195,7 +182,7 @@ function showOverlay() {
   if (S.layer === "neg") div.innerHTML = renderNegModal();
   else if (S.layer === "done") div.innerHTML = renderDoneModal();
   else if (S.layer === "add") div.innerHTML = renderAddModal();
-  bindUrlInput();
+  bindFileInput();
 }
 
 function renderNegModal() {
@@ -203,22 +190,22 @@ function renderNegModal() {
   const total = its.reduce((s, i) => s + Number(i.price), 0);
   return `<div class="overlay" onclick="bgClose(event)">
   <div class="modal">
-    <h2><i class="ti ti-message-circle"></i> 交渉フォーム</h2>
+    <h2><i class="ti ti-message-circle"></i> Negotiation Form</h2>
     <div class="sel-list" style="margin-bottom:14px">
-      <p>選択した商品</p>
-      <ul style="list-style:none">${its.map(i => `<li><span>${esc(i.name)}</span><span>¥${Number(i.price).toLocaleString()}</span></li>`).join("")}</ul>
+      <p>Selected items</p>
+      <ul style="list-style:none">${its.map(i => `<li><span>${esc(i.name)}</span><span>${fmt(i.price)}</span></li>`).join("")}</ul>
       <hr class="divider">
-      <div style="display:flex;justify-content:space-between;font-weight:500;font-size:14px"><span>合計</span><span>¥${total.toLocaleString()}</span></div>
+      <div style="display:flex;justify-content:space-between;font-weight:500;font-size:14px"><span>Total</span><span>${fmt(total)}</span></div>
     </div>
     <div class="fl-col">
-      <div><label for="n-name">お名前</label><input id="n-name" type="text" placeholder="山田 太郎"></div>
-      <div><label for="n-email">Gmailアドレス</label><input id="n-email" type="email" placeholder="you@gmail.com"></div>
-      <div><label for="n-msg">コメント・希望価格など</label><textarea id="n-msg" placeholder="例：まとめて購入したいです。○○円でいかがでしょうか？"></textarea></div>
+      <div><label for="n-name">Your name</label><input id="n-name" type="text" placeholder="Jane Smith"></div>
+      <div><label for="n-email">Gmail address</label><input id="n-email" type="email" placeholder="you@gmail.com"></div>
+      <div><label for="n-msg">Message / offer price</label><textarea id="n-msg" placeholder="e.g. I'd like to buy all three. Would you take $XX?"></textarea></div>
     </div>
     <div id="neg-err"></div>
     <div class="fl" style="margin-top:16px">
-      <button class="btn" onclick="set({layer:null})">キャンセル</button>
-      <button class="btn btn-primary" onclick="submitNeg()">送信する →</button>
+      <button class="btn" onclick="set({layer:null})">Cancel</button>
+      <button class="btn btn-primary" onclick="submitNeg()">Send →</button>
     </div>
   </div></div>`;
 }
@@ -227,9 +214,9 @@ function renderDoneModal() {
   return `<div class="overlay">
   <div class="modal" style="text-align:center;padding:2rem">
     <i class="ti ti-circle-check" style="font-size:48px;color:#1D9E75;display:block;margin-bottom:14px"></i>
-    <h2 style="margin-bottom:8px">送信完了！</h2>
-    <p style="font-size:14px;color:#666;margin-bottom:1.5rem">出品者から折り返しご連絡します。<br>商品は「交渉中」になりました。</p>
-    <button class="btn btn-primary" onclick="set({layer:null,sel:[]})">一覧に戻る</button>
+    <h2 style="margin-bottom:8px">Sent!</h2>
+    <p style="font-size:14px;color:#666;margin-bottom:1.5rem">The seller will get back to you shortly.<br>Items are now marked "Negotiating".</p>
+    <button class="btn btn-primary" onclick="set({layer:null,sel:[]})">Back to list</button>
   </div></div>`;
 }
 
@@ -240,29 +227,29 @@ function submitNeg() {
   const email = document.getElementById("n-email")?.value?.trim();
   const msg = document.getElementById("n-msg")?.value?.trim() || "";
   const err = document.getElementById("neg-err");
-  if (!name) { if (err) err.innerHTML = `<div class="msg-err">お名前を入力してください</div>`; return }
-  if (!email || !email.includes("@")) { if (err) err.innerHTML = `<div class="msg-err">メールアドレスを入力してください</div>`; return }
+  if (!name) { if (err) err.innerHTML = `<div class="msg-err">Please enter your name</div>`; return }
+  if (!email || !email.includes("@")) { if (err) err.innerHTML = `<div class="msg-err">Please enter your email address</div>`; return }
   const its = S.sel.map(id => S.items.find(i => i.id === id)).filter(Boolean);
   const total = its.reduce((s, i) => s + Number(i.price), 0);
-  const itemList = its.map(i => `・${i.name}（¥${Number(i.price).toLocaleString()}）`).join("\n");
-  const subj = `【フリマ交渉】${name}さんから${its.length}点のリクエスト`;
-  const body = `${name}さん（${email}）から交渉リクエストが届きました。\n\n【希望商品】\n${itemList}\n\n【合計】¥${total.toLocaleString()}\n\n【コメント】\n${msg || "（なし）"}`;
+  const itemList = its.map(i => `- ${i.name} (${fmt(i.price)})`).join("\n");
+  const subj = `[Flea Market] Negotiation request from ${name} (${its.length} item(s))`;
+  const body = `You received a negotiation request from ${name} (${email}).\n\nItems requested:\n${itemList}\n\nTotal: ${fmt(total)}\n\nMessage:\n${msg || "(none)"}`;
   const owner = S.ownerEmail || "";
   const url = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(owner)}&cc=${encodeURIComponent(email)}&su=${encodeURIComponent(subj)}&body=${encodeURIComponent(body)}`;
   window.open(url, "_blank");
   const items = S.items.map(i => S.sel.includes(i.id) ? { ...i, status: "negotiating" } : i);
-  save("fm3_items", items);
+  save("fm4_items", items);
   set({ items, layer: "done" });
 }
 
 function renderAdminLogin() {
   return `<div class="pw-wrap">
   <i class="ti ti-lock" style="font-size:36px"></i>
-  <div style="font-size:17px;font-weight:500">管理者ログイン</div>
+  <div style="font-size:17px;font-weight:500">Admin Login</div>
   <div style="width:260px">
-    <div style="margin-bottom:10px"><label for="pw-in">パスワード</label><input id="pw-in" type="password" onkeydown="if(event.key==='Enter')adminLogin()"></div>
-    ${S.adminPwErr ? `<div class="msg-err">パスワードが違います</div>` : ""}
-    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="adminLogin()">ログイン</button>
+    <div style="margin-bottom:10px"><label for="pw-in">Password</label><input id="pw-in" type="password" onkeydown="if(event.key==='Enter')adminLogin()"></div>
+    ${S.adminPwErr ? `<div class="msg-err">Incorrect password</div>` : ""}
+    <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="adminLogin()">Login</button>
   </div></div>`;
 }
 
@@ -274,39 +261,38 @@ function adminLogin() {
 
 function renderAdminMain() {
   let h = `<div style="margin-bottom:1.5rem">
-  <div style="font-size:13px;color:#666;margin-bottom:5px">出品者のGmailアドレス</div>
-  <div class="fl"><input type="email" id="oe-in" value="${esc(S.ownerEmail)}" placeholder="your@gmail.com" style="flex:1"><button class="btn btn-sm" onclick="saveOwner()">保存</button></div>
-  <div style="font-size:12px;color:#999;margin-top:4px">交渉メールが届くアドレスです</div></div>`;
+  <div style="font-size:13px;color:#666;margin-bottom:5px">Seller Gmail address</div>
+  <div class="fl"><input type="email" id="oe-in" value="${esc(S.ownerEmail)}" placeholder="your@gmail.com" style="flex:1"><button class="btn btn-sm" onclick="saveOwner()">Save</button></div>
+  <div style="font-size:12px;color:#999;margin-top:4px">Negotiation emails will be sent here</div></div>`;
 
   h += `<div class="admin-bar">
-    <div style="font-size:15px;font-weight:500">商品一覧 <span style="font-size:12px;color:#999;font-weight:400">↑↓で順番変更</span></div>
-    <button class="btn btn-sm btn-primary" onclick="openAdd()"><i class="ti ti-plus"></i> 追加</button>
+    <div style="font-size:15px;font-weight:500">Items <span style="font-size:12px;color:#999;font-weight:400">↑↓ to reorder</span></div>
+    <button class="btn btn-sm btn-primary" onclick="openAdd()"><i class="ti ti-plus"></i> Add item</button>
   </div>`;
 
   if (!S.items.length) {
-    h += `<div class="empty" style="padding:1.5rem"><i class="ti ti-package" style="font-size:32px;display:block;margin-bottom:8px"></i>商品なし</div>`;
+    h += `<div class="empty" style="padding:1.5rem"><i class="ti ti-package" style="font-size:32px;display:block;margin-bottom:8px"></i>No items</div>`;
   }
 
   S.items.forEach((it, idx) => {
     const isNeg = it.status === "negotiating";
     const isSold = it.status === "sold";
-    const imgUrl = driveUrl(it.imageUrl || "");
     const isFirst = idx === 0;
     const isLast = idx === S.items.length - 1;
     h += `<div class="prod-row">
       <div class="sort-btns">
-        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},-1)" ${isFirst ? "disabled" : ""} aria-label="上へ" style="${isFirst ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-up"></i></button>
-        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},1)" ${isLast ? "disabled" : ""} aria-label="下へ" style="${isLast ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-down"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},-1)" ${isFirst ? "disabled" : ""} aria-label="Move up" style="${isFirst ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-up"></i></button>
+        <button class="btn btn-sm btn-icon" onclick="moveItem(${idx},1)" ${isLast ? "disabled" : ""} aria-label="Move down" style="${isLast ? "opacity:.3;cursor:default" : ""}"><i class="ti ti-chevron-down"></i></button>
       </div>
-      <div class="prod-thumb">${imgUrl ? `<img src="${esc(imgUrl)}" alt="" onerror="this.style.display='none'">` : `<i class="ti ti-photo" style="font-size:18px;color:#aaa"></i>`}</div>
+      <div class="prod-thumb">${it.imageData ? `<img src="${it.imageData}" alt="">` : `<i class="ti ti-photo" style="font-size:18px;color:#aaa"></i>`}</div>
       <div class="prod-info">
         <div class="name">${esc(it.name)}</div>
-        <div class="price">¥${Number(it.price).toLocaleString()} <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}" style="font-size:10px">${isSold ? "Sold Out" : isNeg ? "交渉中" : "出品中"}</span></div>
+        <div class="price">${fmt(it.price)} <span class="badge ${isSold ? "b-sold" : isNeg ? "b-neg" : "b-avail"}" style="font-size:10px">${isSold ? "Sold Out" : isNeg ? "Negotiating" : "Available"}</span></div>
       </div>
       <div class="prod-actions">
-        ${isNeg ? `<button class="btn btn-sm btn-success" onclick="setStatus('${it.id}','sold')"><i class="ti ti-check"></i> 売れた</button><button class="btn btn-sm btn-warn" onclick="setStatus('${it.id}','available')"><i class="ti ti-x"></i> 決裂</button>` : ""}
-        ${isSold ? `<button class="btn btn-sm" onclick="setStatus('${it.id}','available')" title="出品中に戻す"><i class="ti ti-refresh"></i></button>` : ""}
-        <button class="btn btn-sm btn-danger" onclick="delItem('${it.id}')" aria-label="削除"><i class="ti ti-trash"></i></button>
+        ${isNeg ? `<button class="btn btn-sm btn-success" onclick="setStatus('${it.id}','sold')"><i class="ti ti-check"></i> Sold</button><button class="btn btn-sm btn-warn" onclick="setStatus('${it.id}','available')"><i class="ti ti-x"></i> No deal</button>` : ""}
+        ${isSold ? `<button class="btn btn-sm" onclick="setStatus('${it.id}','available')" title="Relist"><i class="ti ti-refresh"></i></button>` : ""}
+        <button class="btn btn-sm btn-danger" onclick="delItem('${it.id}')" aria-label="Delete"><i class="ti ti-trash"></i></button>
       </div>
     </div>`;
   });
@@ -316,62 +302,57 @@ function renderAdminMain() {
 function renderAddModal() {
   return `<div class="overlay" onclick="bgClose(event)">
   <div class="modal">
-    <h2><i class="ti ti-plus"></i> 商品を追加</h2>
+    <h2><i class="ti ti-plus"></i> Add item</h2>
     <div class="fl-col">
       <div>
-        <label for="a-url">Google ドライブの共有URL（任意）</label>
-        <input id="a-url" type="url" placeholder="https://drive.google.com/file/d/..." oninput="previewUrl(this.value)">
-        <div class="url-hint">
-          Google ドライブで写真を右クリック → 共有 → 「リンクを知っている全員」に変更 → リンクをコピーして貼り付け
+        <label>Photo (optional)</label>
+        <div class="upload-zone" onclick="document.getElementById('f-up').click()">
+          <i class="ti ti-upload" style="font-size:22px;display:block;margin-bottom:6px"></i>
+          Click to select a photo
         </div>
-        <div id="url-preview-area"></div>
+        <input type="file" id="f-up" accept="image/*" style="display:none">
+        <div id="img-preview-area"></div>
       </div>
-      <div><label for="a-name">商品名 *</label><input id="a-name" type="text" placeholder="例：ノートPC"></div>
-      <div><label for="a-desc">説明</label><textarea id="a-desc" placeholder="状態・サイズなど"></textarea></div>
-      <div><label for="a-price">価格（円）*</label><input id="a-price" type="number" min="0" placeholder="3000"></div>
+      <div><label for="a-name">Item name *</label><input id="a-name" type="text" placeholder="e.g. Laptop"></div>
+      <div><label for="a-desc">Description</label><textarea id="a-desc" placeholder="Condition, size, etc."></textarea></div>
+      <div><label for="a-price">Price (USD) *</label><input id="a-price" type="number" min="0" step="0.01" placeholder="30"></div>
     </div>
     <div id="add-err"></div>
     <div class="fl" style="margin-top:16px">
-      <button class="btn" onclick="set({layer:null,editUrlRaw:'',editUrlPreview:''})">キャンセル</button>
-      <button class="btn btn-primary" onclick="addItem()">追加する →</button>
+      <button class="btn" onclick="set({layer:null,pendingImg:null})">Cancel</button>
+      <button class="btn btn-primary" onclick="addItem()">Add →</button>
     </div>
   </div></div>`;
 }
 
-function bindUrlInput() {
-  const el = document.getElementById("a-url");
-  if (el && S.editUrlRaw) {
-    el.value = S.editUrlRaw;
-    if (S.editUrlPreview) {
-      const area = document.getElementById("url-preview-area");
-      if (area) area.innerHTML = `<img class="img-preview" src="${esc(S.editUrlPreview)}" alt="プレビュー" onerror="this.style.display='none'">`;
-    }
-  }
+function bindFileInput() {
+  const f = document.getElementById("f-up");
+  if (!f) return;
+  f.onchange = function () {
+    const file = this.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = e => {
+      S.pendingImg = e.target.result;
+      const area = document.getElementById("img-preview-area");
+      if (area) area.innerHTML = `<img class="img-preview" src="${e.target.result}" alt="Preview">`;
+    };
+    reader.readAsDataURL(file);
+  };
 }
 
-function previewUrl(raw) {
-  S.editUrlRaw = raw;
-  const converted = driveUrl(raw);
-  S.editUrlPreview = converted;
-  const area = document.getElementById("url-preview-area");
-  if (area) {
-    area.innerHTML = converted ? `<img class="img-preview" src="${esc(converted)}" alt="プレビュー" onerror="this.style.display='none'">` : "";
-  }
-}
-
-function openAdd() { set({ layer: "add", editUrlRaw: "", editUrlPreview: "" }) }
+function openAdd() { set({ layer: "add", pendingImg: null }) }
 
 function addItem() {
   const name = document.getElementById("a-name")?.value?.trim();
   const desc = document.getElementById("a-desc")?.value?.trim() || "";
   const price = document.getElementById("a-price")?.value;
-  const urlRaw = document.getElementById("a-url")?.value?.trim() || "";
   const err = document.getElementById("add-err");
-  if (!name) { if (err) err.innerHTML = `<div class="msg-err">商品名を入力してください</div>`; return }
-  if (!price || isNaN(price) || Number(price) < 0) { if (err) err.innerHTML = `<div class="msg-err">価格を入力してください</div>`; return }
-  const items = [...S.items, { id: uid(), name, description: desc, price: Number(price), status: "available", imageUrl: urlRaw, createdAt: Date.now() }];
-  save("fm3_items", items);
-  set({ items, layer: null, editUrlRaw: "", editUrlPreview: "" });
+  if (!name) { if (err) err.innerHTML = `<div class="msg-err">Please enter item name</div>`; return }
+  if (!price || isNaN(price) || Number(price) < 0) { if (err) err.innerHTML = `<div class="msg-err">Please enter a price</div>`; return }
+  const items = [...S.items, { id: uid(), name, description: desc, price: Number(price), status: "available", imageData: S.pendingImg || null, createdAt: Date.now() }];
+  save("fm4_items", items);
+  set({ items, layer: null, pendingImg: null });
 }
 
 function moveItem(idx, dir) {
@@ -379,28 +360,28 @@ function moveItem(idx, dir) {
   const newIdx = idx + dir;
   if (newIdx < 0 || newIdx >= items.length) return;
   [items[idx], items[newIdx]] = [items[newIdx], items[idx]];
-  save("fm3_items", items);
+  save("fm4_items", items);
   set({ items });
 }
 
 function delItem(id) {
-  if (!confirm("この商品を削除しますか？")) return;
+  if (!confirm("Delete this item?")) return;
   const items = S.items.filter(i => i.id !== id);
-  save("fm3_items", items);
+  save("fm4_items", items);
   set({ items });
 }
 
 function setStatus(id, status) {
   const items = S.items.map(i => i.id === id ? { ...i, status } : i);
-  save("fm3_items", items);
+  save("fm4_items", items);
   set({ items });
 }
 
 function saveOwner() {
   const v = document.getElementById("oe-in")?.value?.trim() || "";
-  save("fm3_owner", v);
+  save("fm4_owner", v);
   set({ ownerEmail: v });
-  alert("保存しました：" + v);
+  alert("Saved: " + v);
 }
 
 render();
